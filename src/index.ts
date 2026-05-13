@@ -288,6 +288,10 @@ class CyberSecurityRSSServer {
     // Check for specific safe error types that can be shown to user
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
+
+      if (message.includes('enterprise gateway') || message.includes('proxy policy') || message.includes('407')) {
+        return 'Request blocked by an enterprise gateway/proxy. Please allowlist the feed domain or try another source.';
+      }
       
       // Feed not found errors are safe to show
       if (message.includes('feed not found')) {

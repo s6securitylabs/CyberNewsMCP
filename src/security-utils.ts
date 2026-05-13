@@ -27,6 +27,16 @@ export class SecurityUtils {
         return { isValid: false, error: 'Invalid protocol. Only HTTP and HTTPS are allowed.' };
       }
 
+      // Prevent credential leakage / parser ambiguities in URLs
+      if (url.username || url.password) {
+        return { isValid: false, error: 'URLs with embedded credentials are not allowed.' };
+      }
+
+      // Only allow standard ports for RSS/news ingestion
+      if (url.port && !['80', '443'].includes(url.port)) {
+        return { isValid: false, error: 'Only standard HTTP/HTTPS ports are allowed.' };
+      }
+
       // Check for blocked hosts
       const hostname = url.hostname.toLowerCase();
       
@@ -35,9 +45,9 @@ export class SecurityUtils {
         return { isValid: false, error: 'Access to localhost is not allowed.' };
       }
 
-      // Block private IP ranges
+      // Block private/reserved IP ranges
       if (this.isPrivateIP(hostname)) {
-        return { isValid: false, error: 'Access to private IP ranges is not allowed.' };
+        return { isValid: false, error: 'Access to private or reserved IP ranges is not allowed.' };
       }
 
       // Block metadata endpoints
@@ -76,7 +86,7 @@ export class SecurityUtils {
     // Check if all octets are valid
     if (octets.some(octet => octet < 0 || octet > 255)) return false;
     
-    // Check private IP ranges
+    // Check private and reserved IP ranges
     return (
       // 10.0.0.0/8
       octets[0] === 10 ||
@@ -84,6 +94,14 @@ export class SecurityUtils {
       (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
       // 192.168.0.0/16
       (octets[0] === 192 && octets[1] === 168) ||
+      // 169.254.0.0/16 link-local
+      (octets[0] === 169 && octets[1] === 254) ||
+      // 100.64.0.0/10 CGNAT
+      (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) ||
+      // 198.18.0.0/15 benchmarking
+      (octets[0] === 198 && (octets[1] === 18 || octets[1] === 19)) ||
+      // Multicast + future use
+      octets[0] >= 224 ||
       // 127.0.0.0/8 (loopback)
       octets[0] === 127
     );

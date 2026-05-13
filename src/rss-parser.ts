@@ -45,7 +45,7 @@ export class RSSFeedParser {
         items: items.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
       };
     } catch (error) {
-      throw new Error(`Failed to parse feed ${feed.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to parse feed ${feed.name}: ${this.getSafeNetworkError(error)}`);
     }
   }
 
@@ -81,12 +81,16 @@ export class RSSFeedParser {
         headers: {
           'User-Agent': 'CyberSecurity-RSS-MCP-Server/1.0'
         },
+        redirect: 'error',
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        if ([401, 403, 407, 429].includes(response.status)) {
+          console.warn(`Gateway/policy block while fetching article (${response.status}) from ${new URL(url).hostname}`);
+        }
         return null;
       }
 
@@ -144,5 +148,27 @@ export class RSSFeedParser {
     text = text.replace(/Read more.*/gi, '');
     
     return text;
+  }
+
+  private getSafeNetworkError(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return 'Unknown error';
+    }
+
+    const message = error.message.toLowerCase();
+    if (message.includes('econnrefused') || message.includes('econnreset') || message.includes('etimedout')) {
+      return 'Network connection failed.';
+    }
+    if (message.includes('unable to verify') || message.includes('certificate')) {
+      return 'TLS/SSL verification failed.';
+    }
+    if (message.includes('aborted')) {
+      return 'Request timed out.';
+    }
+    if (message.includes('403') || message.includes('407') || message.includes('proxy')) {
+      return 'Request blocked by an enterprise gateway or proxy policy.';
+    }
+
+    return error.message;
   }
 }
